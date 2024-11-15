@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
-import { Response } from 'express';
+import { Controller, Post, Body, Res, HttpStatus, UnauthorizedException, Req } from '@nestjs/common';
+import { Response, Request } from 'express';
 import { AuthorizationService } from './authorization.service';
 import { SignUpDto } from './dto/signUp.dto';
 import { SignInDto } from './dto/signIn.dto';
@@ -13,31 +13,60 @@ export class AuthorizationController {
 	}
 
 	@Post("/sign-up")
-	create(@Body() signUpDto: SignUpDto) {
+	async create(@Body() signUpDto: SignUpDto) {
 		return this.authorizationService.signUp(signUpDto);
 	}
 
 	@Post("/sign-in")
-	findAll(@Body() signInDto: SignInDto) {
-		return this.authorizationService.signIn(signInDto);
+	async findAll(@Res() res: Response, @Body() signInDto: SignInDto) {
+		const result = await this.authorizationService.signIn(signInDto);
+		
+		this.setRefreshCookie(result.tokens.refreshToken, res)
+		  .status(HttpStatus.OK)
+          .send({
+            user: result.user,
+            accessToken: result.tokens.accessToken,
+          });
 	}
 
 	@Post('/refresh')
-	findOne(@Param('id') id: string) {
-		return this.authorizationService.findOne(+id);
+	async refreshToken(@Req() req: Request, @Res() res: Response) {
+		const token = this.getRefreshToken(req);
+
+		const result = await this.authorizationService.refreshToken(token);
+		console.log(result);
+
+		this.setRefreshCookie(result.tokens.refreshToken, res)
+		  .status(HttpStatus.OK)
+		  .send({
+		  	user: result.user,
+			accessToken: result.tokens.accessToken,
+		  });
 	}
 
-	@Post('/logout')
-	remove(@Param('id') id: string) {
-		return this.authorizationService.remove(+id);
-	}
+	// to logout client must delete 'refreshToken' cookie and accessToken locally
+	// @Post('/logout')
+	// async logout() {
+	// }
 
 	private setRefreshCookie(token: string, res: Response) {
-        console.log('attack refresh token: ', token);
         return res.cookie(this.cookieName, token, {
             secure: true,
             httpOnly: true,
-            expires: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // for next 5 days
+            expires: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // for next 3 days
         });
+    }
+
+	private getRefreshToken(req: Request) {
+        const token = req.cookies[this.cookieName];
+        console.log('Token: ', token);
+
+        if (!token || token === '' || token === null) {
+            throw new UnauthorizedException(
+                'Refresh token not found. Please, relogin!'
+            );
+        }
+
+        return token;
     }
 }

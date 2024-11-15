@@ -1,7 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { UserService } from 'src/user/user.service';
 
 @Injectable()
 export class TokenService {
@@ -30,14 +29,14 @@ export class TokenService {
         return { accessToken, refreshToken };
     }
 
-    public verifyToken(token: string, tokenType: 'access' | 'refresh') {
+    public verifyToken(token: string, tokenType: 'access' | 'refresh', ignoreExpiration: boolean = false) {
         try {
             return this.jwtService.verify(token, {
                 secret:
                     tokenType === 'access'
                         ? this.configService.get<string>('SECRET_ACCESS')
                         : this.configService.get<string>('SECRET_REFRESH'),
-                ignoreExpiration: false,
+                ignoreExpiration: ignoreExpiration,
                 algorithms: ['HS256'],
             });
         } catch (e) {
